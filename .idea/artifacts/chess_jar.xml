@@ -1,0 +1,11 @@
+<component name="ArtifactManager">
+  <artifact type="javafx" name="chess:jar">
+    <output-path>$PROJECT_DIR$/../../../../Games</output-path>
+    <root id="root">
+      <element id="directory" name="META-INF">
+        <element id="file-copy" path="$PROJECT_DIR$/../../../../Games/META-INF/MANIFEST.MF" />
+      </element>
+      <element id="module-output" name="chess" />
+    </root>
+  </artifact>
+</component>
