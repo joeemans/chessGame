@@ -4,15 +4,11 @@
  */
 package backend;
 
-/**
- *
- * @author LEGION
- */
-public class Bishop extends Piece {
+public final class Bishop extends Piece {
 
-    Bishop(String type, ChessAlphabet position, String color) {
-        super(type, position, color);
-
+    Bishop(ChessAlphabet position, boolean color) {
+        super(position, color);
+        this.setType("Bishop");
     }
 
     @Override
@@ -29,12 +25,17 @@ public class Bishop extends Piece {
                 return true;
             }
             //bishop takes
-            if ((board.positions[row][column].piece.isWhite && !board.positions[Drow][Dcolumn].piece.isWhite)
-                    || (!board.positions[row][column].piece.isWhite && board.positions[Drow][Dcolumn].piece.isWhite)) {
+            if ((board.positions[row][column].piece.isWhite() && !board.positions[Drow][Dcolumn].piece.isWhite())
+                    || (!board.positions[row][column].piece.isWhite() && board.positions[Drow][Dcolumn].piece.isWhite())) {
                 return true;
             }
         }
         return false;
+    }
+
+    @Override
+    protected Piece clone() throws CloneNotSupportedException {
+        return PieceFactory.createBishop(this.getPosition(),this.isWhite());
     }
 
 }

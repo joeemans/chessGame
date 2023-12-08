@@ -8,7 +8,7 @@ package backend;
  *
  * @author youss
  */
-class InvalidSyntaxException extends Exception {
+public class InvalidSyntaxException extends Exception {
 
     public InvalidSyntaxException(String message) {
         super(message);

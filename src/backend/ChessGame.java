@@ -1,155 +1,268 @@
 package backend;
 
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.Stack;
 
 public class ChessGame {
 
     public Square[][] positions = new Square[8][8];
-    int turn = 0;
-    King wk;
-    King bk;
-    protected ArrayList<Move> moves = new ArrayList<>();
+    public int turn = 0;
+    private King whiteKing;
+    private King blackKing;
+    ArrayList<Move> moves = new ArrayList<>();
     private boolean gameEnded = false;
+    private static ChessGame gameInstance;
+    private final Stack <ChessGameMemento> gameStates = new Stack<>();
+    private final ArrayList <GameObserver> gameObservers = new ArrayList<>();
+    private ChessAlphabet checkedKingLocation;
 
-    public ChessGame() {
+    //here we applied the singleton design pattern to ensure that all times, only one instance of the game exists
+    public static ChessGame getGameInstance(){
+        if (gameInstance == null) {
+            synchronized (ChessGame.class) {
+                if (gameInstance == null) {
+                    gameInstance = new ChessGame();
+                }
+            }
+        }
+        return gameInstance;
+    }
+
+    private ChessGame() {
         initializeGame();
     }
 
+    public static synchronized void cleanup() {
+        if (gameInstance != null)
+        {
+            gameInstance = null;
+        }
+    }
+
+    public void addObserver (GameObserver observer){
+        gameObservers.add(observer);
+    }
+    public void removeObserver (GameObserver observer){
+        gameObservers.remove(observer);
+    }
+    private void notifyCheck (ChessAlphabet position){
+        for (GameObserver observer : gameObservers){
+            observer.check(position);
+        }
+        checkedKingLocation = position;
+    }
+    private void notifyRemoveCheck (ChessAlphabet position){
+        for (GameObserver observer : gameObservers){
+            observer.removeCheck(position);
+        }
+        checkedKingLocation = null;
+    }
+    private void notifyCheckmate(){
+        for (GameObserver observer : gameObservers){
+            observer.checkmate();
+        }
+    }
+
+    private void notifyStalemate(){
+        for (GameObserver observer : gameObservers){
+            observer.stalemate();
+        }
+    }
+
+    private void notifyDrawByInsufficientMaterial(){
+        for (GameObserver observer : gameObservers){
+            observer.drawByInsufficientMaterial();
+        }
+    }
+    private void notifySquaresChanged(ArrayList<ChessAlphabet> changedSquares){
+        for (GameObserver observer : gameObservers){
+            observer.squaresChanged(changedSquares);
+        }
+    }
     private void initializeGame() {
-        King whiteKing = new King("King", ChessAlphabet.e1, "white");
+        whiteKing = (King) PieceFactory.createKing(ChessAlphabet.e1,true);
         positions[ChessAlphabet.e1.getRank()][ChessAlphabet.e1.getFile()] = new Square(whiteKing);
-        wk = whiteKing;
-        King BlackKing = new King("King", ChessAlphabet.e8, "black");
-        positions[ChessAlphabet.e8.getRank()][ChessAlphabet.e8.getFile()] = new Square(BlackKing);
-        bk = BlackKing;
-        Rook whiteRook1 = new Rook("Rook", ChessAlphabet.a1, "white");
-        positions[ChessAlphabet.a1.getRank()][ChessAlphabet.a1.getFile()] = new Square(whiteRook1);
-        Rook whiteRook2 = new Rook("Rook", ChessAlphabet.h1, "white");
-        positions[ChessAlphabet.h1.getRank()][ChessAlphabet.h1.getFile()] = new Square(whiteRook2);
-        Rook blackRook1 = new Rook("Rook", ChessAlphabet.a8, "black");
-        positions[ChessAlphabet.a8.getRank()][ChessAlphabet.a8.getFile()] = new Square(blackRook1);
-        Rook blackRook2 = new Rook("Rook", ChessAlphabet.h8, "black");
-        positions[ChessAlphabet.h8.getRank()][ChessAlphabet.h8.getFile()] = new Square(blackRook2);
-        Bishop whiteBishop1 = new Bishop("Bishop", ChessAlphabet.c1, "white");
-        positions[ChessAlphabet.c1.getRank()][ChessAlphabet.c1.getFile()] = new Square(whiteBishop1);
-        Bishop whiteBishop2 = new Bishop("Bishop", ChessAlphabet.f1, "white");
-        positions[ChessAlphabet.f1.getRank()][ChessAlphabet.f1.getFile()] = new Square(whiteBishop2);
-        Bishop blackBishop1 = new Bishop("Bishop", ChessAlphabet.c8, "black");
-        positions[ChessAlphabet.c8.getRank()][ChessAlphabet.c8.getFile()] = new Square(blackBishop1);
-        Bishop blackBishop2 = new Bishop("Bishop", ChessAlphabet.f8, "black");
-        positions[ChessAlphabet.f8.getRank()][ChessAlphabet.f8.getFile()] = new Square(blackBishop2);
-        Knight whiteKnight1 = new Knight("Knight", ChessAlphabet.b1, "white");
-        positions[ChessAlphabet.b1.getRank()][ChessAlphabet.b1.getFile()] = new Square(whiteKnight1);
-        Knight whiteKnight2 = new Knight("Knight", ChessAlphabet.g1, "white");
-        positions[ChessAlphabet.g1.getRank()][ChessAlphabet.g1.getFile()] = new Square(whiteKnight2);
-        Knight blackKnight1 = new Knight("Knight", ChessAlphabet.b8, "black");
-        positions[ChessAlphabet.b8.getRank()][ChessAlphabet.b8.getFile()] = new Square(blackKnight1);
-        Knight blackKnight2 = new Knight("Knight", ChessAlphabet.g8, "black");
-        positions[ChessAlphabet.g8.getRank()][ChessAlphabet.g8.getFile()] = new Square(blackKnight2);
-        Queen whiteQueen = new Queen("Queen", ChessAlphabet.d1, "white");
-        positions[ChessAlphabet.d1.getRank()][ChessAlphabet.d1.getFile()] = new Square(whiteQueen);
-        Queen blackQueen = new Queen("Queen", ChessAlphabet.d8, "black");
-        positions[ChessAlphabet.d8.getRank()][ChessAlphabet.d8.getFile()] = new Square(blackQueen);
+        blackKing = (King) PieceFactory.createKing(ChessAlphabet.e8,false);
+        positions[ChessAlphabet.e8.getRank()][ChessAlphabet.e8.getFile()] = new Square(blackKing);
+        positions[ChessAlphabet.a1.getRank()][ChessAlphabet.a1.getFile()] = new Square(PieceFactory.createRook(ChessAlphabet.a1,true));
+        positions[ChessAlphabet.h1.getRank()][ChessAlphabet.h1.getFile()] = new Square(PieceFactory.createRook(ChessAlphabet.h1,true));
+        positions[ChessAlphabet.a8.getRank()][ChessAlphabet.a8.getFile()] = new Square(PieceFactory.createRook(ChessAlphabet.a8,false));
+        positions[ChessAlphabet.h8.getRank()][ChessAlphabet.h8.getFile()] = new Square(PieceFactory.createRook(ChessAlphabet.h8,false));
+        positions[ChessAlphabet.c1.getRank()][ChessAlphabet.c1.getFile()] = new Square(PieceFactory.createBishop(ChessAlphabet.c1,true));
+        positions[ChessAlphabet.f1.getRank()][ChessAlphabet.f1.getFile()] = new Square(PieceFactory.createBishop(ChessAlphabet.f1,true));
+        positions[ChessAlphabet.c8.getRank()][ChessAlphabet.c8.getFile()] = new Square(PieceFactory.createBishop(ChessAlphabet.c8,false));
+        positions[ChessAlphabet.f8.getRank()][ChessAlphabet.f8.getFile()] = new Square(PieceFactory.createBishop(ChessAlphabet.f8,false));
+        positions[ChessAlphabet.b1.getRank()][ChessAlphabet.b1.getFile()] = new Square(PieceFactory.createKnight(ChessAlphabet.b1,true));
+        positions[ChessAlphabet.g1.getRank()][ChessAlphabet.g1.getFile()] = new Square(PieceFactory.createKnight(ChessAlphabet.g1,true));
+        positions[ChessAlphabet.b8.getRank()][ChessAlphabet.b8.getFile()] = new Square(PieceFactory.createKnight(ChessAlphabet.b8,false));
+        positions[ChessAlphabet.g8.getRank()][ChessAlphabet.g8.getFile()] = new Square(PieceFactory.createKnight(ChessAlphabet.g8,false));
+        positions[ChessAlphabet.d1.getRank()][ChessAlphabet.d1.getFile()] = new Square(PieceFactory.createQueen(ChessAlphabet.d1,true));
+        positions[ChessAlphabet.d8.getRank()][ChessAlphabet.d8.getFile()] = new Square(PieceFactory.createQueen(ChessAlphabet.d8,false));
 
         for (int i = 0; i < 8; i++) {
-            positions[1][i] = new Square(new Pawn("Pawn", ChessAlphabet.getChessAlphabet(1, i), "white"));
-            positions[6][i] = new Square(new Pawn("Pawn", ChessAlphabet.getChessAlphabet(6, i), "black"));
-
+            positions[1][i] = new Square(PieceFactory.createPawn(ChessAlphabet.getChessAlphabet(1, i),true));
+            positions[6][i] = new Square(PieceFactory.createPawn(ChessAlphabet.getChessAlphabet(6, i),false));
         }
-        for (int i = 2; i < 6; i++) {
+        for (int i = 0; i <8; i++) {
             for (int j = 0; j < 8; j++) {
-                positions[i][j] = new Square();
+                if (positions[i][j] == null)
+                   positions[i][j] = new Square();
+                positions[i][j].location = ChessAlphabet.getChessAlphabet(i,j);
             }
         }
+        saveState();
     }
 
-    public void loadGame(String filename) throws InvalidSyntaxException, InvalidMoveException {
-        ChessGameReader(filename);
-        String color;
-        for (Move move : moves) {
-            if (gameEnded) {
-                System.out.println("Game already ended");
-                return;
-            }
-            System.out.print(move.start);
-              System.out.println(move.end);
-            validateMove(move.start, move.end, move.promotion);
-             printBoard();
-             System.out.println();
-            if (isCheckmate(turn % 2 == 0)) {
-                gameEnded = true;
-                if (turn % 2 == 0) {
-                    color = "Black";
-                } else {
-                    color = "White";
+    private void saveState(){
+        gameStates.push(new ChessGameMemento(positions,turn,gameEnded));
+    }
+
+    private void retrieveFromMemento(ChessGameMemento memento){
+        this.turn = memento.getTurn();
+        this.gameEnded = memento.GameHasEnded();
+        for (int i=0 ; i<8 ; i++)
+            for (int j=0; j<8 ; j++){
+                try {
+                    positions[i][j] = memento.getSavedBoardState()[i][j].clone();
+                } catch (CloneNotSupportedException e) {
+                    throw new RuntimeException(e);
                 }
-                System.out.println(color + " Won");
-                continue;
             }
-            if (isStalemate(turn % 2 == 0)) {
-                gameEnded = true;
-                System.out.println("Stalemate");
-                continue;
+        blackKing = findKing(false);
+        whiteKing = findKing(true);
+        kingInCheck();
+        moves.remove(moves.size()-1);
+    }
+
+    private King findKing(Boolean isWhite) {
+        for (int i=0; i<8 ; i++)
+            for (int j=0 ; j<8 ; j++){
+                if (positions[i][j].piece != null && positions[i][j].piece instanceof King
+                        && isWhite == positions[i][j].piece.isWhite()){
+                    return (King) positions[i][j].piece;
+                }
             }
-            if (drawByInsufficientMaterial()) {
-                gameEnded = true;
-                System.out.println("Insufficient Material");
-                continue;
-            }
-            if (isSquareUnderAttack(wk.position, true)) {
-                System.out.println("White in check");
-            }
-            if (isSquareUnderAttack(bk.position, false)) {
-                System.out.println("Black in check");
+        return null;
+    }
+
+    public boolean undoMove(){
+        if (gameStates.size()>1){
+            gameStates.pop();
+            retrieveFromMemento(gameStates.peek());
+            return true;
+        }
+        return false;
+    }
+
+    private void kingInCheck(){
+        if (checkedKingLocation != null){
+            notifyRemoveCheck(checkedKingLocation);
+        }
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece piece = positions[i][j].piece;
+                if (piece != null && piece.isValidMove(this,ChessAlphabet.getChessAlphabet(i,j),whiteKing.getPosition())) {
+                    notifyCheck(whiteKing.getPosition());
+                    return;
+                }
+                else if (piece != null && piece.isValidMove(this,ChessAlphabet.getChessAlphabet(i,j),blackKing.getPosition())){
+                    notifyCheck(blackKing.getPosition());
+                    return;
+                }
             }
         }
     }
 
-    public boolean isSquareUnderAttack(ChessAlphabet square, boolean isWhite) {
+//    public void loadGame(String filename) throws InvalidSyntaxException, InvalidMoveException {
+//        ChessGameReader(filename);
+//        String color;
+//        for (Move move : moves) {
+//            if (gameEnded) {
+//                System.out.println("Game already ended");
+//                return;
+//            }
+//            System.out.print(move.start);
+//              System.out.println(move.end);
+//            validateMove(move.start, move.end, move.promotion);
+////             printBoard();
+//             System.out.println();
+//            if (isCheckmate(turn % 2 == 0)) {
+//                gameEnded = true;
+//                if (turn % 2 == 0) {
+//                    color = "Black";
+//                } else {
+//                    color = "White";
+//                }
+//                System.out.println(color + " Won");
+//                continue;
+//            }
+//            if (isStalemate(turn % 2 == 0)) {
+//                gameEnded = true;
+//                System.out.println("Stalemate");
+//                continue;
+//            }
+//            if (drawByInsufficientMaterial()) {
+//                gameEnded = true;
+//                System.out.println("Insufficient Material");
+//                continue;
+//            }
+//            if (isSquareUnderAttack(whiteKing.getPosition(), true)) {
+//                System.out.println("White in check");
+//            }
+//            if (isSquareUnderAttack(blackKing.getPosition(), false)) {
+//                System.out.println("Black in check");
+//            }
+//        }
+//    }
+
+    protected boolean isSquareUnderAttack(ChessAlphabet square, boolean isWhite) {
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
-                if (this.positions[i][j].piece != null && this.positions[i][j].piece.isWhite != isWhite
+                if (this.positions[i][j].piece != null && this.positions[i][j].piece.isWhite() != isWhite
                         && this.positions[i][j].piece.isValidMove(this, ChessAlphabet.getChessAlphabet(i, j), square)) {
                     //pawn doesn't take moving forward
-                    if (this.positions[i][j].piece instanceof Pawn && j == square.getFile()) {
-                        return false;
-                    } else {
-                        return true;
-                    }
+                    return !(this.positions[i][j].piece instanceof Pawn) || j != square.getFile();
                 }
             }
         }
         return false;
     }
 
-    public void validateMove(ChessAlphabet start, ChessAlphabet end, char promotion) throws InvalidSyntaxException {
+    public void validateMove(Move move) throws InvalidMoveException, InvalidSyntaxException {
+        ChessAlphabet start = move.getStart();
+        ChessAlphabet end = move.getEnd();
         int row = start.getRank();
         int column = start.getFile();
         int Drow = end.getRank();
         int Dcolumn = end.getFile();
+        int Cdirection = Dcolumn > column ? 1 : -1;
         Piece startPiece = positions[row][column].piece;
-        Piece endPiece = positions[Drow][Dcolumn].piece;
-        if (!isValidMove(start, end)) {
-            System.out.println("Invalid move");
-            return;
+        ArrayList <ChessAlphabet> changedSquares = new ArrayList<>();
+        changedSquares.add(start);
+        changedSquares.add(end);
+        if (!isValidMove(move)) {
+            throw new InvalidMoveException("Invalid Move");
         } else {
-            if (startPiece instanceof King && ((King) startPiece).canCastle(this, start, end)) {
-                System.out.println("Castle");
-            }
-            if (startPiece instanceof Pawn && ((Pawn) startPiece).isEnPassant(this, start, end)) {
-                System.out.println("Enpassant");
-            }
             movePiece(start, end);
         }
-        if (startPiece instanceof Pawn && ((startPiece.isWhite && end.getRank() == 7) || (!startPiece.isWhite && end.getRank() == 0))) {
+        if (startPiece instanceof Pawn && ((startPiece.isWhite() && end.getRank() == 7) || (!startPiece.isWhite() && end.getRank() == 0))) {
+            char promotion = move.getPromotion();
             ((Pawn) startPiece).promotePawn(this, end, promotion);
+        }
+        if(move.isCastle()){
+            ChessAlphabet rookSquare;
+            if(Dcolumn>column) {
+                rookSquare = positions[Drow][Dcolumn + Cdirection].location;
+            }
+            else {
+                rookSquare = positions[Drow][Dcolumn + 2 * Cdirection].location;
+            }
+            changedSquares.add(rookSquare);
+            changedSquares.add(positions[Drow][Dcolumn-Cdirection].location);
+        }
+        if (move.isEnPassant()){
+            changedSquares.add(positions[row][Dcolumn].location);
         }
         if (startPiece instanceof Pawn) {
             ((Pawn) startPiece).setHasMoved();
@@ -159,40 +272,51 @@ public class ChessGame {
         if (startPiece instanceof King) {
             ((King) startPiece).setHasMoved();
         }
+        moves.add(move);
+        notifySquaresChanged(changedSquares);
         turn += 1;
-        if (endPiece != null) {
-            System.out.println("Captured " + endPiece.type);
+        saveState();
+        if(isCheckmate(turn % 2 ==0)){
+            notifyCheckmate();
+            return;
         }
+        if(isStalemate(turn % 2 ==0)){
+            notifyStalemate();
+            return;
+        }
+        if(drawByInsufficientMaterial()){
+            notifyDrawByInsufficientMaterial();
+            return;
+        }
+        kingInCheck();
     }
 
-    public boolean isValidMove(ChessAlphabet start, ChessAlphabet end) {
+    public boolean isValidMove(Move move) {
+        ChessAlphabet start = move.getStart();
+        ChessAlphabet end = move.getEnd();
         int row = start.getRank();
         int column = start.getFile();
         int Drow = end.getRank();
         int Dcolumn = end.getFile();
         int Cdirection = Dcolumn > column ? 1 : -1;
         Piece temp = null;
-        boolean enPassantFlag = false;
-        boolean castleFlag = false;
         //check we have a piece to move
         if (!positions[row][column].isOccupied) {
             return false;
         }
         Piece startPiece = positions[row][column].piece;
-        ChessAlphabet position = startPiece.position;
+        ChessAlphabet position = startPiece.getPosition();
         Piece endPiece = positions[Drow][Dcolumn].piece;
         //check is white turn and piece to move is white
-        if ((turn % 2 == 0 && !startPiece.isWhite) || (turn % 2 != 0 && startPiece.isWhite)) {
+        if ((turn % 2 == 0 && !startPiece.isWhite()) || (turn % 2 != 0 && startPiece.isWhite())) {
             return false;
         }
         //checking for enPassant to be able to reverse it
-        if (startPiece instanceof Pawn && ((Pawn) startPiece).isEnPassant(this, start, end)) {
-            enPassantFlag = true;
+        if (move.isEnPassant()) {
             temp = positions[row][column + Cdirection].piece;
         }
         //checking for castle to be able to reverse it
-        if (startPiece instanceof King && ((King) startPiece).canCastle(this, start, end)) {
-            castleFlag = true;
+        if (move.isCastle()) {
             if (Cdirection == 1) {
                 temp = positions[Drow][Dcolumn + Cdirection].piece;
             } else {
@@ -201,9 +325,9 @@ public class ChessGame {
         }
         //to avoid infinite loop caused by kings being in range of each other
         if (startPiece instanceof King) {
-            if ((startPiece).isWhite && Math.abs(Dcolumn - bk.position.getFile()) <= 1 && Math.abs(Drow - bk.position.getRank()) <= 1) {
+            if ((startPiece).isWhite() && Math.abs(Dcolumn - blackKing.getPosition().getFile()) <= 1 && Math.abs(Drow - blackKing.getPosition().getRank()) <= 1) {
                 return false;
-            } else if (!((startPiece).isWhite) && Math.abs(Dcolumn - wk.position.getFile()) <= 1 && Math.abs(Drow - wk.position.getRank()) <= 1) {
+            } else if (!((startPiece).isWhite()) && Math.abs(Dcolumn - whiteKing.getPosition().getFile()) <= 1 && Math.abs(Drow - whiteKing.getPosition().getRank()) <= 1) {
                 return false;
             }
         }
@@ -214,11 +338,11 @@ public class ChessGame {
             movePiece(start, end);
         }
         //check if after move there is a check
-        if ((turn % 2 == 0 && isSquareUnderAttack(wk.position, true))
-                || (turn % 2 == 1 && isSquareUnderAttack(bk.position, false))) {
+        if ((turn % 2 == 0 && isSquareUnderAttack(whiteKing.getPosition(), true))
+                || (turn % 2 == 1 && isSquareUnderAttack(blackKing.getPosition(), false))) {
             positions[row][column].piece = startPiece;
             positions[row][column].isOccupied = true;
-            startPiece.position = position;
+            startPiece.setPosition(position);
             if (endPiece == null) {
                 positions[Drow][Dcolumn].clearSquare();
             } else {
@@ -233,28 +357,28 @@ public class ChessGame {
         } else {
             positions[Drow][Dcolumn].piece = endPiece;
         }
-        if (enPassantFlag) {
+        if (move.isEnPassant()) {
             positions[row][column + Cdirection].piece = temp;
             positions[row][column + Cdirection].isOccupied = true;
         }
-        if (castleFlag) {
+        if (move.isCastle()) {
             if (Cdirection == 1) {
                 positions[Drow][Dcolumn + Cdirection].isOccupied = true;
                 positions[Drow][Dcolumn + Cdirection].piece = temp;
-                positions[Drow][Dcolumn + Cdirection].piece.position = ChessAlphabet.getChessAlphabet(Drow, Dcolumn + Cdirection);
+                positions[Drow][Dcolumn + Cdirection].piece.setPosition(ChessAlphabet.getChessAlphabet(Drow, Dcolumn + Cdirection));
                 positions[Drow][Dcolumn - Cdirection].clearSquare();
             } else {
                 positions[Drow][Dcolumn + 2 * Cdirection].isOccupied = true;
                 positions[Drow][Dcolumn + 2 * Cdirection].piece = temp;
-                positions[Drow][Dcolumn + 2 * Cdirection].piece.position = ChessAlphabet.getChessAlphabet(Drow, Dcolumn + 2 * Cdirection);
+                positions[Drow][Dcolumn + 2 * Cdirection].piece.setPosition(ChessAlphabet.getChessAlphabet(Drow, Dcolumn + 2 * Cdirection));
                 positions[Drow][Dcolumn - Cdirection].clearSquare();
             }
         }
-        startPiece.position = position;
+        startPiece.setPosition(position);
         return true;
     }
 
-    public void movePiece(ChessAlphabet start, ChessAlphabet end) {
+    private void movePiece(ChessAlphabet start, ChessAlphabet end) {
         int row = start.getRank();
         int column = start.getFile();
         int Drow = end.getRank();
@@ -273,29 +397,31 @@ public class ChessGame {
                 positions[Drow][Dcolumn - Cdirection].piece = positions[Drow][Dcolumn + Cdirection].piece;
                 positions[Drow][Dcolumn - Cdirection].isOccupied = true;
                 positions[Drow][Dcolumn + Cdirection].clearSquare();
-                positions[Drow][Dcolumn - Cdirection].piece.position = ChessAlphabet.getChessAlphabet(Drow, Dcolumn - Cdirection);
+                positions[Drow][Dcolumn - Cdirection].piece.setPosition(ChessAlphabet.getChessAlphabet(Drow, Dcolumn - Cdirection));
             } else {
                 positions[Drow][Dcolumn - Cdirection].piece = positions[Drow][Dcolumn + 2 * Cdirection].piece;
                 positions[Drow][Dcolumn - Cdirection].isOccupied = true;
                 positions[Drow][Dcolumn + 2 * Cdirection].clearSquare();
-                positions[Drow][Dcolumn - Cdirection].piece.position = ChessAlphabet.getChessAlphabet(Drow, Dcolumn - Cdirection);
+                positions[Drow][Dcolumn - Cdirection].piece.setPosition(ChessAlphabet.getChessAlphabet(Drow, Dcolumn - Cdirection));
             }
         }
         positions[Drow][Dcolumn].piece = piece;
         positions[Drow][Dcolumn].isOccupied = true;
         positions[row][column].clearSquare();
-        piece.position = ChessAlphabet.getChessAlphabet(Drow, Dcolumn);
+        piece.setPosition(ChessAlphabet.getChessAlphabet(Drow, Dcolumn));
     }
 
     public List<Square> getAllValidMovesFromSquare(ChessAlphabet square) {
         List<Square> validMoves = new ArrayList<>();
         Piece piece = positions[square.getRank()][square.getFile()].piece;
-        if ((turn % 2 == 0 && !piece.isWhite) || (turn % 2 != 0 && piece.isWhite)) {
+        if (piece == null)
+            return validMoves;
+        if ((turn % 2 == 0 && !piece.isWhite()) || (turn % 2 != 0 && piece.isWhite())) {
             return validMoves;
         }
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
-                if (isValidMove(square, ChessAlphabet.getChessAlphabet(i, j))) {
+                if (isValidMove(new Move(square, ChessAlphabet.getChessAlphabet(i, j) , '0'))) {
                     validMoves.add(positions[i][j]);
                 }
             }
@@ -303,55 +429,55 @@ public class ChessGame {
         return validMoves;
     }
 
-    public void ChessGameReader(String filename) throws InvalidSyntaxException {
-        String temp;
-        String[] str;
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(filename));
-            while ((temp = reader.readLine()) != null) {
-                if (temp.equals("")) {
-                    continue;
-                }
-                str = temp.split(",");
-                char startFile = str[0].charAt(0);
-                char startRank = str[0].charAt(1);
-                char endFile = str[1].charAt(0);
-                char endRank = str[1].charAt(1);
-                int rankS = Character.getNumericValue(startRank) - 1;
-                int fileS = startFile - 'a';
-                int rankE = Character.getNumericValue(endRank) - 1;
-                int fileE = endFile - 'a';
-                if (rankS > 7 || rankS < 0 || fileS > 7 || fileS < 0 || rankE > 7 || rankE < 0 || fileE > 7 || fileE < 0) {
-                    throw new InvalidSyntaxException("Unrecognized move input");
-                }
-                switch (str.length) {
-                    case 2 ->
-                        moves.add(new Move(ChessAlphabet.values()[rankS * 8 + fileS], ChessAlphabet.values()[rankE * 8 + fileE]));
-                    case 3 ->
-                        moves.add(new Move(ChessAlphabet.values()[rankS * 8 + fileS], ChessAlphabet.values()[rankE * 8 + fileE], str[2].charAt(0)));
-                    default ->
-                        throw new InvalidSyntaxException("Unrecognized move input");
-                }
-            }
-            reader.close();
-        } catch (FileNotFoundException e1) {
-            System.out.println("File not found");
-        } catch (IOException e) {
-            System.out.println("File not found");
-        }
-    }
+//    public void ChessGameReader(String filename) throws InvalidSyntaxException {
+//        String temp;
+//        String[] str;
+//        try {
+//            BufferedReader reader = new BufferedReader(new FileReader(filename));
+//            while ((temp = reader.readLine()) != null) {
+//                if (temp.isEmpty()) {
+//                    continue;
+//                }
+//                str = temp.split(",");
+//                char startFile = str[0].charAt(0);
+//                char startRank = str[0].charAt(1);
+//                char endFile = str[1].charAt(0);
+//                char endRank = str[1].charAt(1);
+//                int rankS = Character.getNumericValue(startRank) - 1;
+//                int fileS = startFile - 'a';
+//                int rankE = Character.getNumericValue(endRank) - 1;
+//                int fileE = endFile - 'a';
+//                if (rankS > 7 || rankS < 0 || fileS > 7 || fileS < 0 || rankE > 7 || rankE < 0 || fileE > 7 || fileE < 0) {
+//                    throw new InvalidSyntaxException("Unrecognized move input");
+//                }
+//                switch (str.length) {
+//                    case 2 ->
+//                        moves.add(new Move(ChessAlphabet.values()[rankS * 8 + fileS], ChessAlphabet.values()[rankE * 8 + fileE],'0'));
+//                    case 3 ->
+//                        moves.add(new Move(ChessAlphabet.values()[rankS * 8 + fileS], ChessAlphabet.values()[rankE * 8 + fileE], str[2].charAt(0)));
+//                    default ->
+//                        throw new InvalidSyntaxException("Unrecognized move input");
+//                }
+//            }
+//            reader.close();
+//        } catch (FileNotFoundException e1) {
+//            System.out.println("File not found");
+//        } catch (IOException e) {
+//            System.out.println("File not found");
+//        }
+//    }
 
-    private boolean isStalemate(boolean isWhite) {
-        if ((getAllValidMovesFromSquare(wk.position).isEmpty() && !isSquareUnderAttack(wk.position, true))
-                || ((getAllValidMovesFromSquare(bk.position).isEmpty()) && !isSquareUnderAttack(bk.position, false))) {
+    public boolean isStalemate(boolean isWhite) {
+        if ((getAllValidMovesFromSquare(whiteKing.getPosition()).isEmpty() && !isSquareUnderAttack(whiteKing.getPosition(), true))
+                || ((getAllValidMovesFromSquare(blackKing.getPosition()).isEmpty()) && !isSquareUnderAttack(blackKing.getPosition(), false))) {
             return !isValidMoveForPlayer(isWhite);
         }
         return false;
     }
 
     public boolean isCheckmate(boolean isWhite) {
-        if ((getAllValidMovesFromSquare(wk.position).isEmpty() && isSquareUnderAttack(wk.position, true))
-                || (getAllValidMovesFromSquare(bk.position).isEmpty() && isSquareUnderAttack(bk.position, false))) {
+        if ((getAllValidMovesFromSquare(whiteKing.getPosition()).isEmpty() && isSquareUnderAttack(whiteKing.getPosition(), true))
+                || (getAllValidMovesFromSquare(blackKing.getPosition()).isEmpty() && isSquareUnderAttack(blackKing.getPosition(), false))) {
             return !isValidMoveForPlayer(isWhite);
         }
         return false;
@@ -361,10 +487,10 @@ public class ChessGame {
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
                 Piece piece = positions[i][j].piece;
-                if (piece != null && piece.isWhite == isWhite) {
+                if (piece != null && piece.isWhite() == isWhite) {
                     for (int Drow = 0; Drow < 8; Drow++) {
                         for (int Dcol = 0; Dcol < 8; Dcol++) {
-                            if (isValidMove(ChessAlphabet.getChessAlphabet(i, j), ChessAlphabet.getChessAlphabet(Drow, Dcol))) {
+                            if (isValidMove(new Move(ChessAlphabet.getChessAlphabet(i, j), ChessAlphabet.getChessAlphabet(Drow, Dcol),'0'))) {
                                 // Found a legal move, not checkmate
                                 return true;
                             }
@@ -381,14 +507,14 @@ public class ChessGame {
         //Light pieces are the bishop and the knight
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
-                if (positions[i][j].piece != null && positions[i][j].piece.isWhite) {
+                if (positions[i][j].piece != null && positions[i][j].piece.isWhite()) {
                     if (positions[i][j].piece instanceof Knight || positions[i][j].piece instanceof Bishop) {
                         whiteLightPieceCount++;
                     } else if (!(positions[i][j].piece instanceof King)) {
                         return false;
                     }
                 }
-                if (positions[i][j].piece != null && !positions[i][j].piece.isWhite) {
+                if (positions[i][j].piece != null && !positions[i][j].piece.isWhite()) {
                     if (positions[i][j].piece instanceof Knight || positions[i][j].piece instanceof Bishop) {
                         blackLightPieceCount++;
                     } else if (!(positions[i][j].piece instanceof King)) {
@@ -400,46 +526,46 @@ public class ChessGame {
         return whiteLightPieceCount <= 1 && blackLightPieceCount <= 1;
     }
 
-    private void printBoard() {
-        for (int i = 7; i >= 0; i--) {
-            for (int j = 0; j < 8; j++) {
-                if (positions[i][j] == null || !positions[i][j].isOccupied) {
-                    System.out.print("[ ]"); // indicate empty square
-                } else {
-                    char pieceSymbol = 0;
-                    try {
-                        pieceSymbol = getPieceSymbol(positions[i][j].piece);
-                    } catch (InvalidSyntaxException ex) {
-                        Logger.getLogger(ChessGame.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                    System.out.print("[" + pieceSymbol + "]");
-                }
-            }
-            System.out.println(); // New line after each row
-        }
-    }
+//    private void printBoard() {
+//        for (int i = 7; i >= 0; i--) {
+//            for (int j = 0; j < 8; j++) {
+//                if (positions[i][j] == null || !positions[i][j].isOccupied) {
+//                    System.out.print("[ ]"); // indicate empty square
+//                } else {
+//                    char pieceSymbol = 0;
+//                    try {
+//                        pieceSymbol = getPieceSymbol(positions[i][j].piece);
+//                    } catch (InvalidSyntaxException ex) {
+//                        Logger.getLogger(ChessGame.class.getName()).log(Level.SEVERE, null, ex);
+//                    }
+//                    System.out.print("[" + pieceSymbol + "]");
+//                }
+//            }
+//            System.out.println(); // New line after each row
+//        }
+//    }
 
-    private char getPieceSymbol(Piece piece) throws InvalidSyntaxException {
-        // Returns a character representing the piece
-        if (piece instanceof Pawn) {
-            return piece.isWhite ? 'P' : 'p';
-        } else if (piece instanceof Knight) {
-            return piece.isWhite ? 'N' : 'n';
-        } else if (piece instanceof Bishop) {
-            return piece.isWhite ? 'B' : 'b';
-        } else if (piece instanceof Rook) {
-            return piece.isWhite ? 'R' : 'r';
-        } else if (piece instanceof Queen) {
-            return piece.isWhite ? 'Q' : 'q';
-        } else if (piece instanceof King) {
-            return piece.isWhite ? 'K' : 'k';
-        }
+//    private char getPieceSymbol(Piece piece) throws InvalidSyntaxException {
+//        // Returns a character representing the piece
+//        if (piece instanceof Pawn) {
+//            return piece.isWhite ? 'P' : 'p';
+//        } else if (piece instanceof Knight) {
+//            return piece.isWhite ? 'N' : 'n';
+//        } else if (piece instanceof Bishop) {
+//            return piece.isWhite ? 'B' : 'b';
+//        } else if (piece instanceof Rook) {
+//            return piece.isWhite ? 'R' : 'r';
+//        } else if (piece instanceof Queen) {
+//            return piece.isWhite ? 'Q' : 'q';
+//        } else if (piece instanceof King) {
+//            return piece.isWhite ? 'K' : 'k';
+//        }
+//
+//        //Unrecognized syntax
+//        throw new InvalidSyntaxException("Invalid Syntax for pieces received in getPieceSymbol method");
+//    }
 
-        //Unrecognized syntax
-        throw new InvalidSyntaxException("Invalid Syntax for pieces received in getPieceSymbol method");
-    }
-
-    public boolean isClearPath(ChessAlphabet start, ChessAlphabet end) {
+    protected boolean isClearPath(ChessAlphabet start, ChessAlphabet end) {
         int row = start.getRank();
         int column = start.getFile();
         int Drow = end.getRank();

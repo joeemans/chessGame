@@ -1,40 +1,22 @@
 package backend;
 
-import java.util.logging.Logger;
 
-public abstract class Piece {
+public abstract class Piece implements Cloneable{
 
-    String type;
-    ChessAlphabet position;
-    String color;
-    boolean isWhite;
+    private String type;
+    private ChessAlphabet position;
+    private final boolean isWhite;
 
     public boolean isWhite() {
         return isWhite;
     }
 
-    public Piece(String type, ChessAlphabet position, String color) {
-        setType(type);
+    public Piece(ChessAlphabet position, boolean isWhite) {
         setPosition(position);
-        setColor(color);
-        if (color.equals("white"))
-            isWhite = true;
-        else isWhite = false;
+        this.isWhite = isWhite;
     }
 
-    public String getColor() {
-        return color;
-    }
-
-    private void setColor(String color) {
-        this.color = color;
-    }
-
-    private void setType(String type) {
-        this.type = type;
-    }
-
-    private void setPosition(ChessAlphabet position) {
+    public void setPosition(ChessAlphabet position) {
         this.position = position;
     }
 
@@ -42,10 +24,14 @@ public abstract class Piece {
         return type;
     }
 
-    public ChessAlphabet getPosition() {
+    public void setType(String type) {this.type = type;}
+
+    protected ChessAlphabet getPosition() {
         return position;
     }
 
     abstract boolean isValidMove(ChessGame board, ChessAlphabet start, ChessAlphabet end);
 
+    @Override
+    protected abstract Piece clone() throws CloneNotSupportedException;
 }

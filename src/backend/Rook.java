@@ -1,19 +1,19 @@
 package backend;
 
-public class Rook extends Piece {
+public final class Rook extends Piece {
 
     private boolean hasMoved;//this is needed for the castle move
 
-    public Rook(String type, ChessAlphabet position, String color) {
-        super(type, position, color);
-
+    public Rook(ChessAlphabet position, boolean color) {
+        super(position, color);
+        this.setType("Rook");
     }
 
-    public void setHasMoved() {
+    void setHasMoved() {
         hasMoved = true;
     }
 
-    public boolean getHasMoved() {
+    boolean getHasMoved() {
         return hasMoved;
     }
 
@@ -30,12 +30,17 @@ public class Rook extends Piece {
                 return true;
             }
             //rook takes
-            if ((board.positions[row][column].piece.isWhite && !board.positions[Drow][Dcolumn].piece.isWhite)
-                    || (!board.positions[row][column].piece.isWhite && board.positions[Drow][Dcolumn].piece.isWhite)) {
-                return true;
-            }
+            return (board.positions[row][column].piece.isWhite() && !board.positions[Drow][Dcolumn].piece.isWhite())
+                    || (!board.positions[row][column].piece.isWhite() && board.positions[Drow][Dcolumn].piece.isWhite());
         }
         return false;
     }
 
+    @Override
+    protected Piece clone() throws CloneNotSupportedException {
+        Rook clone = (Rook) PieceFactory.createRook(this.getPosition() , this.isWhite());
+        if(this.hasMoved)
+            clone.setHasMoved();
+        return clone;
+    }
 }
